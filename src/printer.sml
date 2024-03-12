@@ -1,4 +1,4 @@
-functor PrinterFn(C : DOCUMENT_COST) : PRINTER = struct
+functor PrinterFn(C : COST_MODEL) : PRINTER = struct
   (* magic number *)
   val ParamMemoLimit = 7
 
@@ -264,10 +264,10 @@ functor PrinterFn(C : DOCUMENT_COST) : PRINTER = struct
                foldr ms1
              end
 
-    fun memoize f : doc * int * int -> measure_set =
-      let val allSlots = C.limit + 1
+    fun memoize limit f : doc * int * int -> measure_set =
+      let val allSlots = limit + 1
           fun g (d : doc as { memoW, table, ... }, c, i) =
-            if c <= C.limit andalso i <= C.limit andalso memoW = 0 then
+            if c <= limit andalso i <= limit andalso memoW = 0 then
               let val key = i * allSlots + c
               in  case table
                     of NONE => unreachable "No table in memoize"
@@ -284,19 +284,20 @@ functor PrinterFn(C : DOCUMENT_COST) : PRINTER = struct
 
     fun makeString (n, c) = String.implode (List.tabulate (n, fn _ => c))
 
-    fun solve renderer (d : doc) : { isTainted: bool, cost: cost } =
+    fun solve renderer pagewidth (d : doc) : { isTainted: bool, cost: cost } =
       let
+        val limit = C.limit pagewidth
         fun resolve (self, {dc, ...} : doc, c, i) : measure_set =
           let
             fun core () =
               case dc
                 of Text (s, lenS) =>
                      MeasureSet [{ last = c + lenS,
-                                   cost = C.text (c, lenS),
+                                   cost = C.text (pagewidth, c, lenS),
                                    layout = fn () => s }]
                  | Newline _ =>
                      MeasureSet [{ last = i,
-                                   cost = C.newline i,
+                                   cost = C.newline (pagewidth, i),
                                    layout = fn () =>
                                      One ("\n" ^ makeString (i, #" ")) }]
                  | Concat (d1, d2) =>
@@ -321,14 +322,14 @@ functor PrinterFn(C : DOCUMENT_COST) : PRINTER = struct
                  | Context f => self (f (c, i), c, i)
                  | Blank i =>
                      MeasureSet [{ last = c + i,
-                                   cost = C.text (0, 0),
+                                   cost = C.text (pagewidth, 0, 0),
                                    layout =
                                      fn () => One (makeString (i, #" ")) }]
                  | Evaled ms => ms
                  | Fail => unreachable "fails to render"
             val exceeds =
-              (case dc of Text (_, len) => c + len > C.limit orelse i > C.limit
-                        | _ => c > C.limit orelse i > C.limit)
+              (case dc of Text (_, len) => c + len > limit orelse i > limit
+                        | _ => c > limit orelse i > limit)
           in
             if exceeds then
               Tainted (fn () => chooseOne (core ()))
@@ -336,7 +337,7 @@ functor PrinterFn(C : DOCUMENT_COST) : PRINTER = struct
               core ()
           end
         val (m, isTainted) =
-          (case memoize resolve (d, 0, 0)
+          (case memoize limit resolve (d, 0, 0)
              of MeasureSet (m :: _) => (m, false)
               | Tainted m => (m (), true)
               | _ => unreachable "empty set")
@@ -398,21 +399,20 @@ functor PrinterFn(C : DOCUMENT_COST) : PRINTER = struct
   val hcat = foldDoc (op<->)
   val vcat = foldDoc (op<$>)
 
-  fun formatInfo d =
+  fun formatInfo (pw, d) =
     let val lines = DynamicArray.array (32, "")
         fun append line =
           (print ("rendering: " ^ line ^ "\n");
           DynamicArray.update (lines, DynamicArray.bound lines + 1, line))
-        val info = solve append d
+        val info = solve append pw d
         fun finalize () = DynamicArray.foldr (op^) "" lines
-                            before DynamicArray.truncate (lines, 0)
     in  (finalize (), info)
     end
-  fun print renderer d = ignore (solve renderer d)
-  fun format d = #1 (formatInfo d)
-  fun formatDebug d =
-    let val (content, {isTainted, cost}) = formatInfo d
-    in  C.debugFormat (content, isTainted, C.toString cost)
+  fun print renderer pw d = ignore (solve renderer pw d)
+  fun format pw d = #1 (formatInfo (pw, d))
+  fun formatDebug pw d =
+    let val (content, {isTainted, cost}) = formatInfo (pw, d)
+    in  C.debugFormat pw (content, isTainted, C.toString cost)
     end
 end
 
@@ -442,13 +442,15 @@ end = struct
     end
 end
 
-functor DefaultCostFn(val pagewidth: int) : DOCUMENT_COST where type t = int * int =
+structure DefaultCostModel :> COST_MODEL where type t = int * int =
 struct
   type t = int * int
-  val limit = Real.round (Real.fromInt pagewidth * 1.5)
+  fun limit pagewidth = Real.round (Real.fromInt pagewidth * 1.5)
 
-  fun text (pos, len) =
+  fun text (pagewidth, pos, len) =
     let val stop = pos + len
+        val () = print ("(" ^ Int.toString pagewidth ^ ", " ^ Int.toString pos ^
+        ", " ^ Int.toString len ^ ")\n")
     in  if stop > pagewidth then
           let val maxwc = Int.max (pagewidth, pos)
               val a = maxwc - pagewidth
@@ -467,5 +469,5 @@ struct
 
   fun toString (bad, h) = "(" ^ Int.toString bad ^ ", " ^ Int.toString h ^ ")"
 
-  val debugFormat = PrinterUtil.makeDebugFormat pagewidth
+  val debugFormat = PrinterUtil.makeDebugFormat
 end

@@ -1,8 +1,8 @@
 Library
-  signature DOCUMENT_COST
+  signature COST_MODEL
   signature PRINTER
   functor PrinterFn
-  functor DefaultCostFn
+  structure DefaultCostModel
 is
   $/basis.cm
   $/smlnj-lib.cm

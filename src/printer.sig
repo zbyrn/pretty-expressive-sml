@@ -1,4 +1,4 @@
-signature DOCUMENT_COST = sig
+signature COST_MODEL = sig
   (** The cost factory interface.
 
       A valid cost factory should also satisfy the following contracts.
@@ -19,12 +19,13 @@ signature DOCUMENT_COST = sig
   (* A type for cost *)
   type t
 
-  (* [text c l] calculates a cost for a text placement at column position [c]
-     with length [l] *)
-  val text : int * int -> t
+  (* [text (pw, c, l)] calculates a cost for a text placement at column position
+   * [c] with length [l] with page width [pw] *)
+  val text : int * int * int -> t
 
-  (* [newline i] calculates a cost for a newline and indentation at level [i] *)
-  val newline : int -> t
+  (* [newline (pw, i)] calculates a cost for a newline and indentation at level
+   * [i] with page width [pw] *)
+  val newline : int * int -> t
 
   (* [combine (x, y)] combines the costs [x] and [y] together *)
   val combine : t * t -> t
@@ -32,15 +33,15 @@ signature DOCUMENT_COST = sig
   (* [le (x, y)] tests if the cost [x] is less than or equal to the cost [y]. *)
   val le : t * t -> bool
 
-  (* [limit] is the computation width limit. *)
-  val limit: int
+  (* [limit pagewidth] is the computation width limit. *)
+  val limit: int -> int
 
   (* [toString c] produces a string representation of a cost [c] *)
   val toString : t -> string
 
-  (* [debugFormat (s, isTainted, cost)] produces a debugging string
+  (* [debugFormat pw (s, isTainted, cost)] produces a debugging string
      from the output of the core printer. *)
-  val debugFormat : string * bool * string -> string
+  val debugFormat : int -> string * bool * string -> string
 end
 
 signature PRINTER = sig
@@ -55,14 +56,14 @@ signature PRINTER = sig
 
   (* [print renderer d] prints the document [d] by repeatedly calling
    * [renderer]. *)
-  val print : renderer -> doc -> unit
+  val print : renderer -> int -> doc -> unit
 
   (* [format d] renders a document [d] *)
-  val format : doc -> string
+  val format : int -> doc -> string
 
   (* [formatDebug] is similar to [pretty_format] but the debugging
    * information is included as a part of the output string. *)
-  val formatDebug : doc -> string
+  val formatDebug : int -> doc -> string
 
   (** Document Constructions **)
 
