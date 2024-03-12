@@ -53,9 +53,7 @@ functor PrinterFn(C : COST_MODEL) : PRINTER = struct
       | Align of doc
       | Reset of doc
       | Cost of C.t * doc
-      | Context of (int * int -> doc)
       | Blank of int
-      | Evaled of measure_set
       | Fail
     withtype doc =
       { dc: doc_case, id: int, memoW: int, nlCnt: int,
@@ -168,26 +166,6 @@ functor PrinterFn(C : COST_MODEL) : PRINTER = struct
                    table = initTable memoW }
              end
 
-    (* internal function, returned doc must not be fail *)
-    fun context (f : int * int -> doc) (nlCnt : int) : doc =
-      { dc = Context f,
-        id = nextID (),
-        memoW = 0,
-        nlCnt = nlCnt,
-        table = initTable 0 }
-
-    (* Internal function:
-     * This is a super unsafe construct when used arbitrarily.
-     * Only use it when we know exactly that it will be resolved under
-     * a specific column position and indentation level that it was
-     * previously resolved for *)
-    fun evaled (ms : measure_set) (nlCnt : int) : doc =
-      { dc = Evaled ms,
-        id = nextID (),
-        memoW = 0,
-        nlCnt = nlCnt,
-        table = initTable 0 }
-
     fun op<|> (d1 : doc, d2 : doc) : doc =
       case (#dc d1, #dc d2)
         of (Fail, _) => d2
@@ -226,6 +204,17 @@ functor PrinterFn(C : COST_MODEL) : PRINTER = struct
       { last = #last m2,
         cost = C.combine (#cost m1, #cost m2),
         layout = fn () => (Cons (#layout m1 (), #layout m2 ())) }
+
+    fun invalidateCache (d : doc as { dc, table, ... }) =
+          (case table of NONE => () | SOME tbl => HashTbl.clear tbl;
+           invalidateCacheCase dc)
+    and invalidateCacheCase dc =
+          (case dc
+             of (Concat (d1, d2) | Choice (d1, d2)) =>
+                  (invalidateCache d1; invalidateCache d2)
+              | (Nest (_, d) | Align d | Reset d | Cost (_, d)) =>
+                  invalidateCache d
+              | _ => ())
 
     fun processConcat
         (processLeft : measure -> measure_set, ml1 : measure_set)
@@ -319,13 +308,11 @@ functor PrinterFn(C : COST_MODEL) : PRINTER = struct
                            of MeasureSet ms => MeasureSet (List.map addCost ms)
                             | Tainted ms => Tainted (fn () => addCost (ms ()))
                      end
-                 | Context f => self (f (c, i), c, i)
                  | Blank i =>
                      MeasureSet [{ last = c + i,
                                    cost = C.text (pagewidth, 0, 0),
                                    layout =
                                      fn () => One (makeString (i, #" ")) }]
-                 | Evaled ms => ms
                  | Fail => unreachable "fails to render"
             val exceeds =
               (case dc of Text (_, len) => c + len > limit orelse i > limit
@@ -344,6 +331,7 @@ functor PrinterFn(C : COST_MODEL) : PRINTER = struct
         val layout = #layout m ()
       in
         renderTree renderer layout;
+        invalidateCache d;
         { isTainted = isTainted, cost = #cost m }
       end
   end
@@ -387,8 +375,7 @@ functor PrinterFn(C : COST_MODEL) : PRINTER = struct
                let val dp as { id = idp, ... } = flatten d
                in  if idp = id then d else cost c dp
                end
-           | Blank _ => d
-           | (Context _ | Evaled _) => unreachable "before evaluation")
+           | Blank _ => d)
   end
 
   fun op<+>(d1, d2) = d1 ^^ align d2
@@ -402,8 +389,7 @@ functor PrinterFn(C : COST_MODEL) : PRINTER = struct
   fun formatInfo (pw, d) =
     let val lines = DynamicArray.array (32, "")
         fun append line =
-          (print ("rendering: " ^ line ^ "\n");
-          DynamicArray.update (lines, DynamicArray.bound lines + 1, line))
+          DynamicArray.update (lines, DynamicArray.bound lines + 1, line)
         val info = solve append pw d
         fun finalize () = DynamicArray.foldr (op^) "" lines
     in  (finalize (), info)
