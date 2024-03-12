@@ -35,7 +35,7 @@ functor PrinterFn(C : DOCUMENT_COST) : PRINTER = struct
              in  HashTbl.insert tbl (key, v); v
              end
 
-    type measure = { last: int, cost: C.t, layout: unit -> unit }
+    type measure = { last: int, cost: C.t, layout: unit -> string treeof }
 
     fun (m1 : measure) <== (m2 : measure) =
       #last m1 <= #last m2 andalso C.le (#cost m1, #cost m2)
@@ -225,7 +225,7 @@ functor PrinterFn(C : DOCUMENT_COST) : PRINTER = struct
     fun op++ (m1 : measure, m2 : measure) : measure =
       { last = #last m2,
         cost = C.combine (#cost m1, #cost m2),
-        layout = fn () => (#layout m1 (); #layout m2 ()) }
+        layout = fn () => (Cons (#layout m1 (), #layout m2 ())) }
 
     fun processConcat
         (processLeft : measure -> measure_set, ml1 : measure_set)
@@ -293,13 +293,12 @@ functor PrinterFn(C : DOCUMENT_COST) : PRINTER = struct
                 of Text (s, lenS) =>
                      MeasureSet [{ last = c + lenS,
                                    cost = C.text (c, lenS),
-                                   layout = fn () => renderTree renderer s }]
+                                   layout = fn () => s }]
                  | Newline _ =>
                      MeasureSet [{ last = i,
                                    cost = C.newline i,
                                    layout = fn () =>
-                                     (renderer "\n";
-                                      renderer (makeString (i, #" "))) }]
+                                     One ("\n" ^ makeString (i, #" ")) }]
                  | Concat (d1, d2) =>
                      processConcat (fn m1 => self (d2, #last m1, i),
                                     self (d1, c, i))
@@ -324,7 +323,7 @@ functor PrinterFn(C : DOCUMENT_COST) : PRINTER = struct
                      MeasureSet [{ last = c + i,
                                    cost = C.text (0, 0),
                                    layout =
-                                     fn () => renderer (makeString (i, #" ")) }]
+                                     fn () => One (makeString (i, #" ")) }]
                  | Evaled ms => ms
                  | Fail => unreachable "fails to render"
             val exceeds =
@@ -341,8 +340,9 @@ functor PrinterFn(C : DOCUMENT_COST) : PRINTER = struct
              of MeasureSet (m :: _) => (m, false)
               | Tainted m => (m (), true)
               | _ => unreachable "empty set")
+        val layout = #layout m ()
       in
-        #layout m ();
+        renderTree renderer layout;
         { isTainted = isTainted, cost = #cost m }
       end
   end
