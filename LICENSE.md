@@ -1,6 +1,7 @@
 ## ISC License
 
 Copyright (c) 2024 Byron Zhong <zhongbangyuan@gmail.com>
+
 Copyright (c) 2023 Sorawee Porncharoenwase <sorawee.pwase@gmail.com>
 
 Permission to use, copy, modify, and distribute this software for any
