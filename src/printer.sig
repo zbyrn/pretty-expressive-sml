@@ -56,7 +56,7 @@ signature PRINTER = sig
 
   (* [print renderer d] prints the document [d] by repeatedly calling
    * [renderer]. *)
-  val print : renderer -> int -> doc -> unit
+  val pprint : renderer -> int -> doc -> unit
 
   (* [format d] renders a document [d] *)
   val format : int -> doc -> string
@@ -70,6 +70,9 @@ signature PRINTER = sig
   (* [text s] is a document for textual content [s];
    * [s] must not contain a newline. *)
   val text : string -> doc
+
+  (* [blank n] is a document with n spaces *)
+  val blank : int -> doc
 
   (* [newline s] is a document for a newline.
    * When [s] is [NONE], it flattens to [fail].

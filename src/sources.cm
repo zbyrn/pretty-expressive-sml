@@ -9,3 +9,6 @@ is
 
   printer.sig
   printer.sml
+    (setup: (pre: "val w = !Control.Elab.unusedWarn;\n\
+                  \val () = Control.Elab.unusedWarn := true\n;"
+             post: "Control.Elab.unusedWarn := w;"))

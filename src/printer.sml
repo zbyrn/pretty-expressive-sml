@@ -205,7 +205,7 @@ functor PrinterFn(C : COST_MODEL) : PRINTER = struct
         cost = C.combine (#cost m1, #cost m2),
         layout = fn () => (Cons (#layout m1 (), #layout m2 ())) }
 
-    fun invalidateCache (d : doc as { dc, table, ... }) =
+    fun invalidateCache ({ dc, table, ... } : doc) =
           (case table of NONE => () | SOME tbl => HashTbl.clear tbl;
            invalidateCacheCase dc)
     and invalidateCacheCase dc =
@@ -381,7 +381,7 @@ functor PrinterFn(C : COST_MODEL) : PRINTER = struct
   fun op<+>(d1, d2) = d1 ^^ align d2
   fun group d = d <|> (flatten d)
   fun op<->(x, y) = (flatten x) <+> y
-  fun foldDoc f [] = empty
+  fun foldDoc _ [] = empty
     | foldDoc f (x :: xs) = List.foldl f x xs
   val hcat = foldDoc (op<->)
   val vcat = foldDoc (op<$>)
@@ -394,7 +394,7 @@ functor PrinterFn(C : COST_MODEL) : PRINTER = struct
         fun finalize () = DynamicArray.foldr (op^) "" lines
     in  (finalize (), info)
     end
-  fun print renderer pw d = ignore (solve renderer pw d)
+  fun pprint renderer pw d = ignore (solve renderer pw d)
   fun format pw d = #1 (formatInfo (pw, d))
   fun formatDebug pw d =
     let val (content, {isTainted, cost}) = formatInfo (pw, d)
@@ -435,8 +435,6 @@ struct
 
   fun text (pagewidth, pos, len) =
     let val stop = pos + len
-        val () = print ("(" ^ Int.toString pagewidth ^ ", " ^ Int.toString pos ^
-        ", " ^ Int.toString len ^ ")\n")
     in  if stop > pagewidth then
           let val maxwc = Int.max (pagewidth, pos)
               val a = maxwc - pagewidth
