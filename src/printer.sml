@@ -371,8 +371,8 @@ functor PrinterFn(C : COST_MODEL) : PRINTER = struct
                in  if aIdp = aId andalso bIdp = bId then d else ap <|> bp
                end
            | (Nest (_, d) | Align d | Reset d) => flatten d
-           | Cost (c, d as { id, ... }) =>
-               let val dp as { id = idp, ... } = flatten d
+           | Cost (c, d' as { id, ... }) =>
+               let val dp as { id = idp, ... } = flatten d'
                in  if idp = id then d else cost c dp
                end
            | Blank _ => d)
